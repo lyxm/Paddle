@@ -11,8 +11,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
-
-
+#include <cuda_runtime.h>
 #include "AgentLayer.h"
 
 #include "paddle/utils/Logging.h"
@@ -34,7 +33,19 @@ bool AgentLayer::init(const LayerMap& layerMap,
 }
 
 void AgentLayer::forward(PassType passType) {
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t old = tb - fb;
+
   Layer::forward(passType);
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
 
   Argument& realOutput = realLayer_->getOutput();
   int realHeight = realOutput.getBatchSize();
@@ -51,10 +62,29 @@ void AgentLayer::forward(PassType passType) {
   } else {
     output_ = realOutput;
   }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+  }
 }
 
 void SequenceAgentLayer::forward(PassType passType) {
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t old = tb - fb;
+
   Layer::forward(passType);
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
 
   Argument& realOutput = realLayer_->getOutput();
   int realNumSequences = realOutput.getNumSequences();
@@ -70,6 +100,13 @@ void SequenceAgentLayer::forward(PassType passType) {
                        /* seqStart */ 0, /* seqSize */ numSamples_ + 1);
   } else {
     output_ = realOutput;
+  }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
   }
 }
 
@@ -132,12 +169,28 @@ bool ScatterAgentLayer::init(const LayerMap& layerMap,
     return false;
   }
   setNeedGradient(true);
+  // LOG(ERROR) << "init name:" << this->getName() << " " << this;
   return true;
 }
 
 void ScatterAgentLayer::forward(PassType passType) {
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t old = tb - fb;
+
   Layer::forward(passType);
-  CHECK_EQ(realLayer_->getDeviceId(), this->getDeviceId());
+  // LOG(ERROR) << "name:" << this->getName() << " " << this;
+  // LOG(ERROR) << "real:" << realLayer_->getDeviceId();
+  CHECK_EQ(realLayer_->getDeviceId(), this->getDeviceId())
+      << realLayer_->getDeviceId() << " vs " << this->getDeviceId();
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
 
   int width = this->getSize();
   if (realOutArg_.value || realOutArg_.ids) {
@@ -156,6 +209,13 @@ void ScatterAgentLayer::forward(PassType passType) {
       const MatrixPtr& realV = realLayer_->getOutputValue();
       outV->selectRows(*realV, *ids_);
     }
+  }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
   }
 }
 
@@ -254,6 +314,7 @@ void SequenceScatterAgentLayer::forward(PassType passType) {
 
     IVector::resizeOrCreate(cpuInputStartPos_, height, false);
     int* inStarts = cpuInputStartPos_->getData();
+
     size_t offsetOut = 0;
     for (size_t i = 0; i < numSequences; ++i) {
       outStarts[i] = offsetOut;

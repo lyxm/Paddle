@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include <cuda_runtime.h>
 
 #include "paddle/utils/Stat.h"
 #include "paddle/utils/Util.h"
@@ -47,6 +48,11 @@ void MultiNetwork::init(const ModelConfig& config, ParamInitCallback callback,
     }
     subNetworks_[i - 1]->init(config);
   }
+
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 }
 
 void MultiNetwork::prefetch(const std::vector<Argument>& inArgs) {

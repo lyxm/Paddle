@@ -15,6 +15,7 @@ limitations under the License. */
 
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <functional>
 #include <paddle/parameter/Argument.h>
@@ -197,9 +198,13 @@ protected:
    */
   void addOutputArgument(int deviceId);
 
+  mutable std::chrono::system_clock::time_point last_;
+
 public:
   explicit Layer(const LayerConfig& config, bool useGpu = FLAGS_use_gpu);
-  virtual ~Layer() {}
+  virtual ~Layer() {
+    LOG(ERROR) << "destruct " << this;
+  }
 
   /// Register a Layer
   static ClassRegistrar<Layer, LayerConfig> registrar_;
@@ -223,22 +228,46 @@ public:
   /** 
    * Get layer's name.
    */
-  const std::string& getName() const { return config_.name(); }
+  const std::string& getName() const {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getName:" << this;
+    }
+    return config_.name(); }
 
   /** 
    * Get layer's type.
    */
-  const std::string& getType() const { return config_.type(); }
+  const std::string& getType() const {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getType:" << this;
+    }
+    return config_.type(); }
 
   /** 
    * Get layer's size.
    */
-  size_t getSize() const { return config_.size(); }
+  size_t getSize() const {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getSize:" << this;
+    }
+    return config_.size(); }
 
   /** 
    * Get layer's deviceId.
    */
-  int getDeviceId() const { return deviceId_; }
+  int getDeviceId() const {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getDeviceId:" << this;
+    }
+    return deviceId_; }
 
   /** 
    * Add the inputLayer.
@@ -248,22 +277,46 @@ public:
   /** 
    * Get the size of inputLayer[i].
    */
-  const LayerPtr& getPrev(size_t i) { return inputLayers_[i]; }
+  const LayerPtr& getPrev(size_t i) {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getPrev:" << this;
+    }
+    return inputLayers_[i]; }
 
   /**
    * Get the forward-output value.
    */
-  const MatrixPtr& getOutputValue() { return output_.value; }
+  const MatrixPtr& getOutputValue() {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getOutputValue:" << this;
+    }
+    return output_.value; }
 
   /**
    * Get the forward-output label.
    */
-  const IVectorPtr& getOutputLabel() { return output_.ids; }
+  const IVectorPtr& getOutputLabel() {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getOutputLabel:" << this;
+    }
+    return output_.ids; }
 
   /**
    * Get the backward-Loss value.
    */
-  const MatrixPtr& getOutputGrad() { return output_.grad; }
+  const MatrixPtr& getOutputGrad() {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getOutputGrad:" << this;
+    }
+    return output_.grad; }
   /**
    * If layer has multi-output, set output into outputMap_. 
    */
@@ -275,6 +328,11 @@ public:
    * Get the output based on layer's name.
    */
   Argument& getOutput(const std::string& str = "") {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getOutput:" << this;
+    }
     if (str == "") {
       return output_;
     } else {
@@ -291,6 +349,11 @@ public:
    * Get the output based on deviceId.
    */
   const Argument& getOutput(int deviceId) const {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getOutput:" << this;
+    }
     if (deviceId == getDeviceId()) {
       return output_;
     } else {
@@ -308,12 +371,24 @@ public:
   /**
    * Get layer's parameters.
    */
-  const std::vector<ParameterPtr>& getParameters() { return parameters_; }
+  const std::vector<ParameterPtr>& getParameters() {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getParameters:" << this;
+    }
+    return parameters_; }
 
   /**
    * Get layer's bias-parameters.
    */
-  const ParameterPtr& getBiasParameter() { return biasParameter_; }
+  const ParameterPtr& getBiasParameter() {
+    auto n = std::chrono::system_clock::now();
+    if (n - last_ > std::chrono::seconds(600)) {
+      last_ = n;
+      LOG(ERROR) << "getBiasParameter:" << this;
+    }
+    return biasParameter_; }
 
   /**
    * Create pointer of layer.

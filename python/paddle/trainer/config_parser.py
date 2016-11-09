@@ -272,12 +272,15 @@ def GetLayerBaseName(name):
 def MakeLayerNameInSubmodel(name, submodel_name = None):
     global g_current_submodel
     global g_add_submodel_suffix
+    traceback.print_stack()
     if (submodel_name is None
         and not g_add_submodel_suffix
         and not g_current_submodel.is_recurrent_layer_group):
+        logger.warning(name)
         return name
     if submodel_name is None:
         submodel_name = g_current_submodel.name
+    logger.warning(name + "@" + submodel_name)
     return name + "@" + submodel_name
 
 # Define a recurrent layer group begin with RecurrentLayerGroupBegin

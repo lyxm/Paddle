@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include <cuda_runtime.h>
 
 #include "paddle/utils/Stat.h"
 #include "paddle/utils/Util.h"
@@ -39,6 +40,11 @@ void ParallelNeuralNetwork::init(
     CHECK_LT(deviceId, numDevices_);
     addComputeThread(deviceId);
   }
+
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 }
 
 void ParallelNeuralNetwork::addComputeThread(int deviceId) {

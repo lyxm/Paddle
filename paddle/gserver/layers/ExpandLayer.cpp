@@ -11,8 +11,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
-
-
+#include <cuda_runtime.h>
 #include "ExpandLayer.h"
 #include "paddle/utils/Logging.h"
 #include "paddle/utils/Stat.h"
@@ -43,9 +42,21 @@ bool ExpandLayer::init(const LayerMap& layerMap,
 }
 
 void ExpandLayer::forward(PassType passType) {
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t old = tb - fb;
+
   Layer::forward(passType);
   // Expand layer should have exactly 2 input, one for data, one for size
   CHECK_EQ(2U, inputLayers_.size());
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
 
   // using two input:
   // * first one for data;
@@ -59,6 +70,14 @@ void ExpandLayer::forward(PassType passType) {
   size_t numSequences = startPositions->getSize() - 1;
   const int* starts = startPositions->getData(false);
 
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
+
   CHECK_EQ(starts[numSequences], shapeInput.getBatchSize());
   if (type_) {
     // when trans_type = seq, input[1] must hasSubseq
@@ -68,6 +87,14 @@ void ExpandLayer::forward(PassType passType) {
     CHECK_EQ(dataInput.getBatchSize(), shapeInput.getNumSequences());
   }
 
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
+
   // set output sequence info as shape sequence
   output_.sequenceStartPositions = shapeInput.sequenceStartPositions;
   if (shapeInput.hasSubseq()) {
@@ -75,8 +102,24 @@ void ExpandLayer::forward(PassType passType) {
         shapeInput.subSequenceStartPositions;
   }
 
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
+
   // reserve output: Expand output to batchsize of sequence data.
   reserveOutput(outputBatchSize, dataInput.value->getWidth());
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
 
   MatrixPtr inputValue = getInputValue(0);
   MatrixPtr outputValue = getOutputValue();
@@ -90,6 +133,14 @@ void ExpandLayer::forward(PassType passType) {
     }
   }
 
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
+
   if (useGpu_) {
     // TODO(Dangqingqing) move copyFrom
     IVector::resizeOrCreate(expandStartsPos_, outputBatchSize, true);
@@ -97,11 +148,17 @@ void ExpandLayer::forward(PassType passType) {
   } else {
     expandStartsPos_ = cpuExpandStartsPos_;
   }
-
   outputValue->copyByRowIndex(*inputValue, *expandStartsPos_);
 
   if (biases_.get() != NULL) {
     outputValue->addBias(*(biases_->getW()), 1);
+  }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
   }
 }
 

@@ -23,6 +23,8 @@ limitations under the License. */
 #include <sstream>
 #include <limits>
 
+#include <cuda_runtime.h>
+
 #include <google/protobuf/text_format.h>
 
 #include "paddle/utils/PythonUtil.h"
@@ -274,6 +276,10 @@ void Trainer::train(size_t numPasses) {
 
   trainerInternal_.getGradientMachine()->start(*config_, dataProvider_);
 
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem before any pass: " << (tb - fb) / 1024 / 1024 << "M";
+
   for (size_t i = 0; i < numPasses; ++i) {
     if (IGradientMachineMode::trainWholeDataInOneBatch(mode_)) {
       trainOnePassBatch(config_->getConfig().start_pass() + i);
@@ -283,6 +289,8 @@ void Trainer::train(size_t numPasses) {
     if (i < numPasses - 1) {
       dataProvider_->reset();
     }
+    CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+    LOG(ERROR) << "Gmem after pass " << i << ": " << (tb - fb)/1024/1024 << "M";
   }
 
   trainerInternal_.getGradientMachine()->finish();
@@ -432,7 +440,12 @@ void Trainer::trainOnePass(int passId) {
     }
     {
       REGISTER_TIMER("TrainBatch");
+      size_t fb, tb;
+
       trainerInternal_.trainOneBatch(batchId, dataBatch);
+      CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+      LOG(ERROR) << "Gmem after pass " << passId << " batch " << batchId
+        << ": " << (tb - fb) / 1024 / 1024 << "M";
     }
 
     if (averageEvaluator_ &&

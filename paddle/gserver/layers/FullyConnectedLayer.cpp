@@ -12,7 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-
+#include <cuda_runtime.h>
 #include "FullyConnectedLayer.h"
 #include "paddle/utils/Logging.h"
 #include "paddle/utils/Stat.h"
@@ -68,7 +68,19 @@ void FullyConnectedLayer::prefetch() {
 }
 
 void FullyConnectedLayer::forward(PassType passType) {
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t old = tb - fb;
+
   Layer::forward(passType);
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
 
   /* malloc memory for the output_ if necessary */
   int batchSize = getInput(0).getBatchSize();
@@ -77,6 +89,14 @@ void FullyConnectedLayer::forward(PassType passType) {
   {
     REGISTER_TIMER_INFO("FwResetTimer", getName().c_str());
     reserveOutput(batchSize, size);
+  }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
   }
 
   MatrixPtr outV = getOutputValue();
@@ -95,9 +115,24 @@ void FullyConnectedLayer::forward(PassType passType) {
     outV->addBias(*(biases_->getW()), 1);
   }
 
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
+
   /* activation */ {
     REGISTER_TIMER_INFO("FwAtvTimer", getName().c_str());
     forwardActivation();
+  }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
   }
 }
 

@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include <cuda_runtime.h>
 
 #include "AverageLayer.h"
 
@@ -57,7 +58,19 @@ bool AverageLayer::init(const LayerMap& layerMap,
 }
 
 void AverageLayer::forward(PassType passType) {
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t old = tb - fb;
+
   Layer::forward(passType);
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
 
   // average layer should have exactly 1 input
   CHECK_EQ(1U, inputLayers_.size());
@@ -83,6 +96,15 @@ void AverageLayer::forward(PassType passType) {
   CHECK_EQ(dim, input.value->getWidth());
 
   resetOutput(newBatchSize, dim);
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
+
   auto startsPos = startPositions->getVector(useGpu_);
   MatrixPtr inputValue = getInputValue(0);
   getOutputValue()->sequenceAvgForward(*inputValue, *startsPos, mode_);
@@ -102,7 +124,22 @@ void AverageLayer::forward(PassType passType) {
     outV->addBias(*(biases_->getW()), 1);
   }
 
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
+
   /* activation */ { forwardActivation(); }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+  }
 }
 
 void AverageLayer::backward(const UpdateCallback& callback) {

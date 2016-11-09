@@ -129,7 +129,9 @@ protected:
   int numSequences_;  // number of sequences in this scatterAgentLayer
 
 public:
-  explicit ScatterAgentLayer(const LayerConfig& config) : Layer(config) {}
+  explicit ScatterAgentLayer(const LayerConfig& config) : Layer(config) {
+    LOG(ERROR) << this << " ScatterAgentLayer " << config.ShortDebugString();
+  }
 
   virtual ~ScatterAgentLayer() {}
 
@@ -146,6 +148,8 @@ public:
    */
   void setRealLayer(LayerPtr layer, const std::vector<int>& ids,
                     bool copyId = false) {
+    CHECK(layer) << "layer should not be nullptr";
+    LOG(ERROR) << "set real for:" << this->getName() << " " << this;
     realLayer_ = layer;
     IVector::resizeOrCreate(ids_, ids.size(), useGpu_);
     ids_->copyFrom(ids.data(), ids.size());
@@ -163,6 +167,8 @@ public:
   // are selected row for realOutArg in realLayer
   void setRealLayerAndOutput(LayerPtr layer, const Argument& outArg,
                              const IVectorPtr& ids, int idIndex, int idSize) {
+    CHECK(layer) << "layer should not be nullptr";
+    // LOG(ERROR) << "set real for:" << this->getName() << " " << this;
     realLayer_ = layer;
     realOutArg_ = outArg;
     ids_ = ids;
@@ -199,7 +205,9 @@ protected:
 
 public:
   explicit SequenceScatterAgentLayer(const LayerConfig& config)
-      : ScatterAgentLayer(config) {}
+      : ScatterAgentLayer(config) {
+    LOG(ERROR) << "SequenceScatterAgentLayer:" << this;
+  }
   virtual ~SequenceScatterAgentLayer() {}
 
   void forward(PassType passType);

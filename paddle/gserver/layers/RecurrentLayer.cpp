@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include <cuda_runtime.h>
 
 #include "Layer.h"
 #include "paddle/utils/Stat.h"
@@ -146,6 +147,11 @@ void RecurrentLayer::resetState() {
   Matrix::resizeOrCreate(prevOutput_, 1, getSize(), /* trans= */ false,
                          useGpu_);
   prevOutput_->zeroMem();
+
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 }
 
 void RecurrentLayer::setState(LayerStatePtr state) {

@@ -16,6 +16,9 @@ limitations under the License. */
 #include "paddle/utils/Util.h"
 
 #include "paddle/utils/Logging.h"
+// #include "paddle/math/SparseMatrix.h"
+
+#include <cuda_runtime.h>
 
 #include "AddtoLayer.h"
 #include "CosSimLayer.h"
@@ -41,7 +44,14 @@ Layer::Layer(const LayerConfig& config, bool useGpu)
     : config_(config),
       useGpu_(useGpu),
       deviceId_(-1),
-      needSequenceInfo_(true) {}
+      needSequenceInfo_(true) {
+  LOG(ERROR) << "construct " << this << " " << config_.name()
+      << " " << config_.type() << " " << config_.ShortDebugString();
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem during construct " << this << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
+}
 
 bool Layer::init(const LayerMap& layerMap, const ParameterMap& parameterMap) {
   if (useGpu_ && FLAGS_parallel_nn) {
@@ -100,6 +110,10 @@ bool Layer::init(const LayerMap& layerMap, const ParameterMap& parameterMap) {
   initNeedFlags();
   markInBackward_.assign(inputLayers_.size(), false);
 
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after init " << this << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
   return true;
 }
 
@@ -124,6 +138,10 @@ LayerPtr Layer::create(const LayerConfig& config) {
 
 void Layer::resetSpecifyOutput(Argument& output, size_t height, size_t width,
                                bool isValueClean, bool isGradClean) {
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t old = tb - fb;
+
   SetDevice device(output.deviceId);
 
   Matrix::resizeOrCreate(output.value, height, width, /* trans */ false,
@@ -132,11 +150,26 @@ void Layer::resetSpecifyOutput(Argument& output, size_t height, size_t width,
     output.value->zeroMem();
   }
 
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << height << "x" << width << " "
+    << config_.ShortDebugString();
+    old = n;
+  }
   if (passType_ != PASS_TEST && needGradient()) {
     Matrix::resizeOrCreate(output.grad, height, width, /* trans */ false,
                            useGpu(output.deviceId));
     if (isGradClean) {
       output.grad->zeroMem();
+    }
+    CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+    size_t n = tb - fb;
+    if (n > old) {
+    LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << height << "x" << width << " "
+        << config_.ShortDebugString();
     }
   }
 }

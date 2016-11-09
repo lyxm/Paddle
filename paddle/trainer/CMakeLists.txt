@@ -25,6 +25,7 @@ set(TRAINER_HEADERS
 
 add_library(paddle_trainer_lib STATIC
     ${TRAINER_SOURCES})
+target_link_libraries(paddle_trainer_lib /usr/local/cuda/lib64/libcudart.so)
 
 add_style_check_target(paddle_trainer_lib
     ${TRAINER_SOURCES})

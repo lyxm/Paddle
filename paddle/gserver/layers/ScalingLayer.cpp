@@ -12,7 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-
+#include <cuda_runtime.h>
 #include "paddle/utils/Logging.h"
 #include "Layer.h"
 #include "paddle/math/Matrix.h"
@@ -56,6 +56,10 @@ bool ScalingLayer::init(const LayerMap& layerMap,
 }
 
 void ScalingLayer::forward(PassType passType) {
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t old = tb - fb;
+
   Layer::forward(passType);
 
   MatrixPtr weightV = getInputValue(0);
@@ -68,9 +72,25 @@ void ScalingLayer::forward(PassType passType) {
   CHECK_EQ(weightV->getWidth(), 1U);
   CHECK_EQ(weightV->getHeight(), batchSize);
 
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  size_t n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
+  }
+
   {
     REGISTER_TIMER_INFO("FwResetTimer", getName().c_str());
     resetOutput(batchSize, dataDim);
+  }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
+    old = n;
   }
 
   MatrixPtr outV = getOutputValue();
@@ -78,6 +98,13 @@ void ScalingLayer::forward(PassType passType) {
     REGISTER_TIMER_INFO("FwScalingTimer", getName().c_str());
     // outV += inV1 * weight
     outV->addRowScale(0, *inV1, *weightV);
+  }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  n = tb - fb;
+  if (n > old) {
+  LOG(ERROR) << "Gmem increase in " << __PRETTY_FUNCTION__ << ": "
+    << (float)(n - old) / 1024.0 / 1024 << "M " << config_.ShortDebugString();
   }
 }
 

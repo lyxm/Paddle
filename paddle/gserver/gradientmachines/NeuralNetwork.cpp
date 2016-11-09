@@ -18,6 +18,8 @@ limitations under the License. */
 #include "paddle/utils/Logging.h"
 #include "paddle/utils/CustomStackTrace.h"
 
+#include <cuda_runtime.h>
+
 #include "paddle/utils/Stat.h"
 #include "hl_gpu.h"
 #include "NeuralNetwork.h"
@@ -154,7 +156,10 @@ void NeuralNetwork::init(const ModelConfig& config, ParamInitCallback callback,
     }
   }
 
+  LOG(ERROR) << this << "  NN:" << this->subModelName_;
   for (const auto& layer : layers_) {
+    LOG(ERROR) << "layer:" << layer.get() << " " << layer.use_count()
+      << " " << layer->getName();
     layer->init(layerMap_, parameterMap_);
     layer->initSubNetwork(this /*root*/, config_, parameterTypes, useGpu);
   }
@@ -174,6 +179,11 @@ void NeuralNetwork::init(const ModelConfig& config, ParamInitCallback callback,
     CHECK(it != layerMap_.end());
     outputLayers_.push_back(it->second);
   }
+
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 }
 
 void NeuralNetwork::connect(LayerPtr agentLayer, LayerPtr realLayer,
@@ -251,6 +261,11 @@ void NeuralNetwork::forward(const std::vector<Argument>& inArgs,
   if (passType == PASS_TEST) {
     gLayerStackTrace.clear();
   }
+
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 }
 
 void NeuralNetwork::resetState() {

@@ -12,6 +12,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include <cuda_runtime.h>
+
 #include "paddle/utils/Stat.h"
 #include "paddle/utils/Util.h"
 #include "paddle/utils/Flags.h"
@@ -159,7 +161,12 @@ public:
     if (biasParameter_) {
       biases_ =
           std::unique_ptr<Weight>(new Weight(1, getSize(), biasParameter_));
+      LOG(ERROR) << __PRETTY_FUNCTION__ << config_.ShortDebugString();
     }
+    size_t fb, tb;
+    CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+    LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+      << (tb - fb) / 1024 / 1024 << "M";
     return true;
   }
 
@@ -239,6 +246,8 @@ void RecurrentGradientMachine::init(
           memoryConfig.is_sequence()
               ? new SequenceScatterAgentLayer(scatterConfig)
               : new ScatterAgentLayer(scatterConfig));
+      LOG(ERROR) << "Create " << memoryFrameLines_[i].rootAgent.get()
+                 << " " << memoryConfig.is_sequence();
       memoryFrameLines_[i].rootAgent->init(LayerMap(), parameterMap_);
 
       memoryFrameLines_[i].bootLayer = memoryFrameLines_[i].rootAgent;
@@ -263,6 +272,8 @@ void RecurrentGradientMachine::init(
         agent.reset(memoryConfig.is_sequence()
                         ? new SequenceScatterAgentLayer(*agentConfig)
                         : new ScatterAgentLayer(*agentConfig));
+        LOG(ERROR) << "Create " << agent.get()
+                   << " " << memoryConfig.is_sequence();
         agent->init(LayerMap(), parameterMap_);
       }
     }
@@ -292,6 +303,11 @@ void RecurrentGradientMachine::init(
   }
 
   targetInfoInlinkId_ = subModelConfig->target_inlinkid();
+
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 }
 
 void RecurrentGradientMachine::resizeOrCreateFrames(int numFrames) {
@@ -329,18 +345,24 @@ void RecurrentGradientMachine::resizeOrCreateFrames(int numFrames) {
         NeuralNetwork::newNeuralNetwork(subModelName_));
     frame->init(config_, subParamInitCb);
 
+    LOG(ERROR) << "inframes:" << i << " " << inFrameLines_.size();
     for (auto& inFrameLine : inFrameLines_) {
       inFrameLine.agents.push_back(frame->getLayer(inFrameLine.linkName));
+      LOG(ERROR) << inFrameLine.agents.back().get() << " "
+                 << inFrameLine.linkName;
     }
 
     for (auto& outFrameLine : outFrameLines_) {
       outFrameLine.frames.push_back(frame->getLayer(outFrameLine.layerName));
     }
+    LOG(ERROR) << "memframes:" << i << " " << memoryFrameLines_.size();
     for (auto& memoryFrameLine : memoryFrameLines_) {
       memoryFrameLine.frames.push_back(
           frame->getLayer(memoryFrameLine.layerName));
       memoryFrameLine.agents.push_back(
           frame->getLayer(memoryFrameLine.linkName));
+      LOG(ERROR) << memoryFrameLine.agents.back().get() << " "
+                 << memoryFrameLine.linkName;
     }
     if (eosFrameLine_) {
       eosFrameLine_->layers.push_back(
@@ -349,6 +371,11 @@ void RecurrentGradientMachine::resizeOrCreateFrames(int numFrames) {
 
     frames_.emplace_back(std::move(frame));
   }
+
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 }
 
 void RecurrentGradientMachine::resizeBootFrame(int numSequences) {
@@ -363,6 +390,11 @@ void RecurrentGradientMachine::resizeBootFrame(int numSequences) {
                memoryFrameLine.rootLayer->getOutput().getNumSequences());
     }
   }
+
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 }
 
 void RecurrentGradientMachine::prefetch(const std::vector<Argument>& inArgs) {
@@ -485,6 +517,11 @@ void RecurrentGradientMachine::forward(const std::vector<Argument>& inArgs,
     }
   }
 
+  size_t fb, tb;
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
+
   for (auto& outFrameLine : outFrameLines_) {
     auto gatherAgent =
         dynamic_cast<GatherAgentLayer*>(outFrameLine.agentLayer.get());
@@ -492,6 +529,10 @@ void RecurrentGradientMachine::forward(const std::vector<Argument>& inArgs,
     gatherAgent->copyIdAndSequenceInfo(input, info_[targetInfoInlinkId_].allIds,
                                        info_[targetInfoInlinkId_].idIndex);
   }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 
   for (int i = 0; i < maxSequenceLength_; ++i) {
     int idSize = 0;
@@ -535,19 +576,41 @@ void RecurrentGradientMachine::forward(const std::vector<Argument>& inArgs,
     }
   }
 
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
+
   REGISTER_TIMER_INFO("RecurrentFwTime", "RecurrentFwTime");
   // forward
   for (auto& memoryFrameLine : memoryFrameLines_) {
     memoryFrameLine.bootLayer->forward(passType);
   }
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
+
   for (int i = 0; i < maxSequenceLength_; ++i) {
     const std::vector<Argument> inArgs;
     std::vector<Argument> outArgs;
     frames_[i]->forward(inArgs, &outArgs, passType);
+    if (hasSubseq) {
+      for (auto& outFrameLine : outFrameLines_) {
+        CHECK(outFrameLine.frames[i]->getOutput().sequenceStartPositions)
+          << "In hierachical RNN, all out links should be from sequences.";
+      }
+    }
+
+    CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+    LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+      << (tb - fb) / 1024 / 1024 << "M";
   }
   if (evaluator_ && passType == PASS_TEST) {
     this->eval(evaluator_.get());
   }
+
+  CHECK_EQ(cudaSuccess, cudaMemGetInfo(&fb, &tb));
+  LOG(ERROR) << "Gmem after " << __PRETTY_FUNCTION__ << ": "
+    << (tb - fb) / 1024 / 1024 << "M";
 }
 
 void RecurrentGradientMachine::backward(const UpdateCallback& callback) {
